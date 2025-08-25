@@ -1,0 +1,257 @@
+Docker Practise with malu ma:
+
+1. App with front/back end
+
+2. dump separately in 2 diff containers, i.e. need 2 containers
+
+3. things needed: 
+	
+	1. docker
+	2. EC2
+	3. connect database with docker with another container(future purpose)
+
+4. to install java in ec2 -->> sudo yum install -y java-17-amazon-corretto
+
+5. to install java-compose 
+
+	>> sudo curl -L "https://github.com/docker/compose/releases/latest/download/docker-compose-$(uname -s)-$(uname -m)" -o /usr/local/bin/docker-compose
+
+	>> sudo chmod +x /usr/local/bin/docker-compose
+
+6. to install docker compose
+
+   >> sudo curl -L "https://github.com/docker/compose/releases/download/v2.24.2/docker-compose-$(uname -s)-$(uname -m)" -o /usr/local/bin/docker-compose
+   >> sudo chmod +x /usr/local/bin/docker-compose
+
+
+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
+
+-------------------------------------------------------------------------------------------------------------
+To Start: 
+
+1. create EC2 with pemp key.
+
+2. install docker & pull OpenJDK image
+
+3. to connect ec2 machine with local cmd, go to the location where the key-pair is available & open the cmd prompt from there & execute 
+	ssh -i pemp-file-name ec2-user@public-id-address
+
+4. in order to check the java version open bash by cmd --> docker run -it openjdk:<tag_name> bash & check version & type "exit" to exit from bash.
+
+5. to switch into root user --> sudo su - root  (we can avoid "sudo" in upcoming cmds as we switched as "root user"
+
+6. structure:
+
+calculator-app/
+├── backend/
+│   └── CalculatorServlet.java
+├── frontend/
+│   ├── index.html
+│   ├── style.css
+│   └── script.js
+├── Dockerfile
+└── web.xml
+
+
+7. create directory:
+	
+	---> mkdir calculator-app && cd calculator-app
+	---> mkdir -p backend/WEB-INF/classes
+
+
+8. nano frontend/index.html & paste the below code
+
+	<!DOCTYPE html>
+<html>
+<head>
+  <title>Calculator</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <h1>Simple Calculator</h1>
+  <input type="number" id="num1" placeholder="First number">
+  <input type="number" id="num2" placeholder="Second number">
+  <select id="operator">
+    <option value="+">+</option>
+    <option value="-">-</option>
+    <option value="*">*</option>
+    <option value="/">/</option>
+  </select>
+  <button onclick="calculate()">Calculate</button>
+  <p id="result"></p>
+
+  <script src="script.js"></script>
+</body>
+</html>
+-----------------------------------------------------------------------
+
+9. nano frontend/style.css
+	
+body {
+  font-family: Arial;
+  text-align: center;
+  margin-top: 50px;
+}
+input, select {
+  margin: 5px;
+  padding: 10px;
+}
+------------------------------------------------------------------------
+
+10. nano frontend/script.js
+
+	function calculate() {
+  const num1 = document.getElementById("num1").value;
+  const num2 = document.getElementById("num2").value;
+  const operator = document.getElementById("operator").value;
+
+  fetch(`/calculate?num1=${num1}&num2=${num2}&operator=${operator}`)
+    response.text())
+    .then(result => {
+      document.getElementById("result").innerText = "Result: " + result;
+    });
+}
+------------------------------------------------------------------------
+
+11. nano backend/CalculatorServlet.java
+
+import java.io.*;
+import jakarta.servlet.*;
+import jakarta.servlet.http.*;
+
+public class CalculatorServlet extends HttpServlet {
+    protected void doGet(HttpServletRequest request, HttpServletResponse response) throws IOException {
+        double num1 = Double.parseDouble(request.getParameter("num1"));
+        double num2 = Double.parseDouble(request.getParameter("num2"));
+        String operator = request.getParameter("operator");
+        double result = 0;
+
+        switch (operator) {
+            case "+": result = num1 + num2; break;
+            case "-": result = num1 - num2; break;
+            case "*": result = num1 * num2; break;
+            case "/": result = num2 != 0 ? num1 / num2 : 0; break;
+        }
+
+        response.setContentType("text/plain");
+        response.getWriter().write(String.valueOf(result));
+    }
+}
+-------------------------------------------------------------------------------
+
+12. nano web.xml
+
+<web-app xmlns="http://jakarta.ee/xml/ns/jakartaee" version="5.0">
+  <servlet>
+    <servlet-name>CalculatorServlet</servlet-name>
+    <servlet-class>CalculatorServlet</servlet-class>
+  </servlet>
+  <servlet-mapping>
+    <servlet-name>CalculatorServlet</servlet-name>
+    <url-pattern>/calculate</url-pattern>
+  </servlet-mapping>
+</web-app>
+-----------------------------------------------------------------------------------
+
+13. nano Dockerfile
+
+FROM openjdk:18-slim
+
+# Install required tools
+RUN apt-get update && apt-get install -y wget unzip curl
+
+# Install Tomcat
+RUN wget https://archive.apache.org/dist/tomcat/tomcat-10/v10.1.20/bin/apache-tomcat-10.1.20.tar.gz && \
+    tar -xvzf apache-tomcat-10.1.20.tar.gz && \
+    mv apache-tomcat-10.1.20 /opt/tomcat && \
+    rm apache-tomcat-10.1.20.tar.gz
+
+# Download Jakarta Servlet API for compilation
+RUN curl -o /opt/tomcat/lib/jakarta.servlet-api.jar https://repo1.maven.org/maven2/jakarta/servlet/jakarta.servlet-api/6.0.0/jakarta.servlet-api-6.0.0.jar
+
+# Copy servlet source
+COPY backend/CalculatorServlet.java /opt/tomcat/webapps/ROOT/WEB-INF/classes/
+
+# Copy frontend files
+COPY frontend/ /opt/tomcat/webapps/ROOT/
+
+# Copy web.xml
+COPY web.xml /opt/tomcat/webapps/ROOT/WEB-INF/web.xml
+
+# Compile the servlet
+RUN javac -cp /opt/tomcat/lib/jakarta.servlet-api.jar /opt/tomcat/webapps/ROOT/WEB-INF/classes/CalculatorServlet.java
+
+# Expose port and start Tomcat
+EXPOSE 8080
+CMD ["/opt/tomcat/bin/catalina.sh", "run"]
+------------------------------------------------------------------------------------------------------------------
+14. run docker by command : docker build -t java-calculator . 
+
+13. image created, to check --> docker images
+
+14. to run that created image ---> docker run -itd -p 8080:8080 image-name
+
+15. now container created, to check ---> docker ps (or) docker container ls
+
+16. now copy the ec2 public ip address & port number & paste in the any browser(http://13.218.163.37:8080), to check whether the app will run or not
+
+17. to delete all the containers available ---> docker rm -f $(docker ps -aq)
+-----------------------------------------------------------------------------------------------------------------------------------------------------
+
+Docker Volume: 
+
+1. to create a volume ---> docker volume create vol-name
+
+2. to list all the volumes ---> docker volume ls
+
+3. to inspect the volume folder ---> docker volume inspect vol-name
+
+4. to mount volume ---> docker run itd -p 80:80 -v vol_name:/data image_name:tag
+
+5. Bind Mount -- is for accessing files from our local path
+
+6 . for B.M (if u're using linux) ---> docker run -itd --name <any_name> -v /home/user_name/folder_name:/data image_name:tag
+
+7. Enter into the container ---> docker exec -it <container_id> /bin/sh  (or) docker exec -it 647f96142ae2 /bin/bash
+
+8. to create a file from container --> echo "Hello from host" > /data/test.txt
+
+9. now exit from the container & check the file created by ---> cat /home/user_name/folder_name/test.txt
+
+10. To delete the volume --> docker volume rm <vol-name>
+
+11. To stop container ----> docker stop <container_id>
+
+12. To restart the stopped container ---> docker restart <container_id>
+
+13. To convert the container into image ----> docker commit <container_id> <new_image_name>:tag
+
+14. To save the image locally ---> docker save -o /usr/local/<backup_name>.tar <image_name>:tag
+
+15. To load that image ---> docker load -i <backup_name>.tar
+
+------------------------------------------------------
+Accessing Windows Path from WSL or any Linux platform:
+------------------------------------------------------
+
+1. First we need to check whether windows drive is mounted into Linux platform
+	-----> ls /mnt/c
+
+2. If not mounted, enable it -----> sudo nano /etc/wsl.conf , then add
+
+	[automount]
+	enabled = true
+	root = /mnt/
+	options = "metadata"
+
+3. Restart the WSL ---> wsl --shutdown   & re-open it
+
+4. Now as usual create a volume as before, to mount use
+	---> docker run -itd --name <any-name> -v /mnt/c/user_name/folder-directory_name:/data <image_name>:tag
+
+5. we need to go inside the container as before, we can check there inside the "data" folder
+
+
+
+
+
